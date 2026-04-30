@@ -37,11 +37,16 @@ export default function AdminDashboardPage() {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  const [adminUsername, setAdminUsername] = useState("管理员");
+
   // 检查登录状态
   useEffect(() => {
     const token = localStorage.getItem("adminToken");
+    const username = localStorage.getItem("adminUsername");
     if (!token) {
       router.push("/admin");
+    } else if (username) {
+      setAdminUsername(username);
     }
   }, [router]);
 
@@ -128,7 +133,7 @@ export default function AdminDashboardPage() {
               <div>
                 <h1 className="text-xl font-bold text-slate-800">旅行规划管理后台</h1>
                 <p className="text-sm text-slate-500">
-                  欢迎，{localStorage.getItem("adminUsername") || "管理员"}
+                  欢迎，{adminUsername}
                 </p>
               </div>
             </div>
