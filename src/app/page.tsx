@@ -79,7 +79,13 @@ export default function Home() {
 
   // 上报记录到后台
   const reportRecord = async (data: TravelFormData, content: string) => {
-    if (!deviceUuid) return;
+    // 获取或生成 deviceUuid
+    let uuid = localStorage.getItem("deviceUuid");
+    if (!uuid) {
+      uuid = crypto.randomUUID();
+      localStorage.setItem("deviceUuid", uuid);
+      setDeviceUuid(uuid);
+    }
 
     try {
       // 尝试解析 JSON 内容
@@ -93,11 +99,13 @@ export default function Home() {
         // 解析失败时不存储详细内容
       }
 
+      console.log("正在上报记录:", { uuid, destination: data.destination });
+      
       const response = await fetch("/api/travel-records/report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          deviceUuid,
+          deviceUuid: uuid,
           destination: data.destination,
           startDate: data.startDate.split("T")[0],
           endDate: data.endDate.split("T")[0],
@@ -108,9 +116,13 @@ export default function Home() {
         }),
       });
 
-      if (response.ok) {
+      const result = await response.json();
+      console.log("上报结果:", result);
+
+      if (response.ok && result.success) {
         setReportStatus("success");
       } else {
+        console.error("上报失败:", result);
         setReportStatus("error");
       }
     } catch (error) {
