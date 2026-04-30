@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     const client = getSupabaseClient();
     let query = client
       .from("travel_records")
-      .select("id, device_uuid, destination, start_date, end_date, travelers, trip_type, preferences, created_at", {
+      .select("id, device_uuid, destination, start_date, end_date, travelers, trip_type, preferences, result_content, created_at", {
         count: "exact",
       })
       .order("created_at", { ascending: false })
