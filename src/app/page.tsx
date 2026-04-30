@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Plane, Sparkles } from "lucide-react";
 import { TravelForm, TravelFormData } from "@/components/travel-form";
 import { TravelResult, LoadingSkeleton } from "@/components/travel-result";
@@ -10,11 +10,24 @@ export default function Home() {
   const [result, setResult] = useState<string>("");
   const [hasResult, setHasResult] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const [deviceUuid, setDeviceUuid] = useState<string>("");
+  const [reportStatus, setReportStatus] = useState<"idle" | "success" | "error">("idle");
+
+  // 生成或获取设备 UUID
+  useEffect(() => {
+    let uuid = localStorage.getItem("deviceUuid");
+    if (!uuid) {
+      uuid = crypto.randomUUID();
+      localStorage.setItem("deviceUuid", uuid);
+    }
+    setDeviceUuid(uuid);
+  }, []);
 
   const handleGenerate = useCallback(async (data: TravelFormData) => {
     setIsLoading(true);
     setResult("");
     setHasResult(false);
+    setReportStatus("idle");
 
     abortControllerRef.current = new AbortController();
 
@@ -48,6 +61,9 @@ export default function Home() {
       }
 
       setHasResult(true);
+
+      // 上报规划记录
+      await reportRecord(data, fullContent);
     } catch (error) {
       if ((error as Error).name === "AbortError") {
         console.log("请求已取消");
@@ -61,6 +77,48 @@ export default function Home() {
     }
   }, []);
 
+  // 上报记录到后台
+  const reportRecord = async (data: TravelFormData, content: string) => {
+    if (!deviceUuid) return;
+
+    try {
+      // 尝试解析 JSON 内容
+      let resultContent = null;
+      try {
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          resultContent = JSON.parse(jsonMatch[0]);
+        }
+      } catch {
+        // 解析失败时不存储详细内容
+      }
+
+      const response = await fetch("/api/travel-records/report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deviceUuid,
+          destination: data.destination,
+          startDate: data.startDate.split("T")[0],
+          endDate: data.endDate.split("T")[0],
+          travelers: data.travelers,
+          tripType: data.tripType,
+          preferences: data.preferences,
+          resultContent,
+        }),
+      });
+
+      if (response.ok) {
+        setReportStatus("success");
+      } else {
+        setReportStatus("error");
+      }
+    } catch (error) {
+      console.error("上报记录失败:", error);
+      setReportStatus("error");
+    }
+  };
+
   const handleReset = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -68,6 +126,7 @@ export default function Home() {
     setResult("");
     setHasResult(false);
     setIsLoading(false);
+    setReportStatus("idle");
   }, []);
 
   return (
@@ -125,6 +184,18 @@ export default function Home() {
           </div>
         </div>
 
+        {/* 上报状态提示 */}
+        {reportStatus === "success" && (
+          <div className="max-w-4xl mx-auto mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+            规划已保存，可前往管理后台查看
+          </div>
+        )}
+        {reportStatus === "error" && (
+          <div className="max-w-4xl mx-auto mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+            规划生成成功，但保存记录时出现问题
+          </div>
+        )}
+
         {/* 表单或结果 */}
         <div className="mb-8">
           {!hasResult ? (
@@ -152,6 +223,15 @@ export default function Home() {
                 </pre>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* 设备ID展示（调试用，生产环境可隐藏） */}
+        {deviceUuid && (
+          <div className="max-w-4xl mx-auto mt-8 p-4 bg-slate-100 rounded-lg">
+            <p className="text-xs text-slate-500">
+              设备ID: <span className="font-mono">{deviceUuid}</span>
+            </p>
           </div>
         )}
       </main>
