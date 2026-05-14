@@ -4,7 +4,7 @@ import { getSupabaseClient } from "@/storage/database/supabase-client";
 // 上报旅行规划记录（供前端网站调用）
 export async function POST(request: NextRequest) {
   try {
-    const { deviceUuid, destination, startDate, endDate, travelers, tripType, preferences, resultContent } = await request.json();
+    const { deviceUuid, destination, startDate, endDate, travelers, tripType, preferences, resultContent, userId } = await request.json();
 
     if (!deviceUuid || !destination || !startDate || !endDate) {
       return NextResponse.json(
@@ -25,6 +25,7 @@ export async function POST(request: NextRequest) {
         trip_type: tripType || "常规旅行",
         preferences: preferences || "",
         result_content: resultContent || null,
+        user_id: userId || null, // 关联用户ID
       })
       .select("id")
       .single();

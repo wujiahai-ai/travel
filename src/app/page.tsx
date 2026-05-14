@@ -1,19 +1,33 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Plane, Sparkles } from "lucide-react";
+import { Plane, Sparkles, User, LogOut, Crown } from "lucide-react";
 import { TravelForm, TravelFormData } from "@/components/travel-form";
 import { TravelResult, LoadingSkeleton } from "@/components/travel-result";
+import { useRouter } from "next/navigation";
+
+interface UserInfo {
+  id: string;
+  email: string;
+  nickname: string;
+  membership_type: string;
+  daily_generate_count: number;
+  daily_limit: number;
+  can_generate: boolean;
+}
 
 export default function Home() {
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<string>("");
   const [hasResult, setHasResult] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [deviceUuid, setDeviceUuid] = useState<string>("");
   const [reportStatus, setReportStatus] = useState<"idle" | "success" | "error">("idle");
+  const [user, setUser] = useState<UserInfo | null>(null);
+  const [showLimitAlert, setShowLimitAlert] = useState(false);
 
-  // 生成或获取设备 UUID
+  // 初始化设备 UUID
   useEffect(() => {
     let uuid = localStorage.getItem("deviceUuid");
     if (!uuid) {
@@ -23,11 +37,50 @@ export default function Home() {
     setDeviceUuid(uuid);
   }, []);
 
+  // 加载用户信息
+  useEffect(() => {
+    const loadUser = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      try {
+        const res = await fetch("/api/auth/me", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (data.success) {
+          setUser(data.user);
+          localStorage.setItem("user", JSON.stringify(data.user));
+        } else {
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+        }
+      } catch {
+        // 忽略错误
+      }
+    };
+    loadUser();
+  }, []);
+
+  // 登出
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    setUser(null);
+  };
+
   const handleGenerate = useCallback(async (data: TravelFormData) => {
+    // 检查生成次数限制
+    if (user && !user.can_generate) {
+      setShowLimitAlert(true);
+      return;
+    }
+
     setIsLoading(true);
     setResult("");
     setHasResult(false);
     setReportStatus("idle");
+    setShowLimitAlert(false);
 
     abortControllerRef.current = new AbortController();
 
@@ -62,6 +115,23 @@ export default function Home() {
 
       setHasResult(true);
 
+      // 增加生成次数
+      const token = localStorage.getItem("token");
+      if (token) {
+        await fetch("/api/auth/increment-count", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        // 更新本地用户状态
+        if (user) {
+          setUser({
+            ...user,
+            daily_generate_count: user.daily_generate_count + 1,
+            can_generate: user.daily_generate_count + 1 < user.daily_limit,
+          });
+        }
+      }
+
       // 上报规划记录
       await reportRecord(data, fullContent);
     } catch (error) {
@@ -75,7 +145,7 @@ export default function Home() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [user]);
 
   // 上报记录到后台
   const reportRecord = async (data: TravelFormData, content: string) => {
@@ -113,6 +183,7 @@ export default function Home() {
           tripType: data.tripType,
           preferences: data.preferences,
           resultContent,
+          userId: user?.id, // 关联用户ID
         }),
       });
 
@@ -147,17 +218,53 @@ export default function Home() {
       <header className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-orange-500/10 via-rose-500/10 to-amber-500/10" />
         <div className="relative container mx-auto px-4 py-8">
-          <div className="flex items-center justify-center gap-3">
-            <div className="p-3 bg-gradient-to-br from-orange-500 to-rose-500 rounded-2xl shadow-lg shadow-orange-500/25">
-              <Plane className="w-8 h-8 text-white" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-gradient-to-br from-orange-500 to-rose-500 rounded-2xl shadow-lg shadow-orange-500/25">
+                <Plane className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-rose-600 bg-clip-text text-transparent">
+                  智能旅行规划助手
+                </h1>
+                <p className="text-sm text-muted-foreground mt-1">
+                  AI 驱动的个性化旅行攻略与行李清单生成
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-rose-600 bg-clip-text text-transparent">
-                智能旅行规划助手
-              </h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                AI 驱动的个性化旅行攻略与行李清单生成
-              </p>
+
+            {/* 用户信息 */}
+            <div className="flex items-center gap-3">
+              {user ? (
+                <div className="flex items-center gap-3 bg-white/60 backdrop-blur-sm rounded-xl px-4 py-2 border border-white/50">
+                  {user.membership_type !== "free" && (
+                    <Crown className="w-4 h-4 text-yellow-500" />
+                  )}
+                  <div className="text-right">
+                    <p className="text-sm font-medium">{user.nickname}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {user.membership_type === "free" 
+                        ? `今日剩余 ${user.daily_limit - user.daily_generate_count} 次`
+                        : "会员无限次"}
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleLogout}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition"
+                    title="退出登录"
+                  >
+                    <LogOut className="w-4 h-4 text-gray-500" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => router.push("/auth")}
+                  className="flex items-center gap-2 bg-white/60 backdrop-blur-sm rounded-xl px-4 py-2 border border-white/50 hover:bg-white/80 transition"
+                >
+                  <User className="w-4 h-4" />
+                  <span className="text-sm font-medium">登录/注册</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -195,6 +302,22 @@ export default function Home() {
             </div>
           </div>
         </div>
+
+        {/* 次数限制提示 */}
+        {showLimitAlert && (
+          <div className="max-w-4xl mx-auto mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-red-700 font-medium">今日生成次数已用完</p>
+            <p className="text-red-600 text-sm mt-1">
+              升级会员可解锁无限次生成
+              <button 
+                onClick={() => router.push("/auth")}
+                className="ml-2 underline hover:no-underline"
+              >
+                立即升级
+              </button>
+            </p>
+          </div>
+        )}
 
         {/* 上报状态提示 */}
         {reportStatus === "success" && (
