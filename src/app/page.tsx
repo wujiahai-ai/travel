@@ -248,13 +248,24 @@ export default function Home() {
                         : "会员无限次"}
                     </p>
                   </div>
-                  <button
-                    onClick={handleLogout}
-                    className="p-2 hover:bg-gray-100 rounded-lg transition"
-                    title="退出登录"
-                  >
-                    <LogOut className="w-4 h-4 text-gray-500" />
-                  </button>
+                  <div className="flex gap-1">
+                    {user.membership_type === "free" && (
+                      <button
+                        onClick={() => router.push("/membership")}
+                        className="p-2 hover:bg-yellow-50 rounded-lg transition text-yellow-600"
+                        title="升级会员"
+                      >
+                        <Crown className="w-5 h-5" />
+                      </button>
+                    )}
+                    <button
+                      onClick={handleLogout}
+                      className="p-2 hover:bg-gray-100 rounded-lg transition"
+                      title="退出登录"
+                    >
+                      <LogOut className="w-4 h-4 text-gray-500" />
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <button
@@ -310,7 +321,7 @@ export default function Home() {
             <p className="text-red-600 text-sm mt-1">
               升级会员可解锁无限次生成
               <button 
-                onClick={() => router.push("/auth")}
+                onClick={() => router.push("/membership")}
                 className="ml-2 underline hover:no-underline"
               >
                 立即升级
