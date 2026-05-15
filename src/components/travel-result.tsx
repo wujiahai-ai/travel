@@ -1,15 +1,23 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { MapPin, Utensils, Package, Calendar, DollarSign, Lightbulb, Check, RefreshCw, Clock, Star, Copy, CheckCheck } from "lucide-react";
+import { MapPin, Utensils, Package, Calendar, DollarSign, Lightbulb, Check, RefreshCw, Clock, Star, Copy, CheckCheck, Download, Share2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { exportToPDF, exportToImage, TravelData } from "@/lib/export-utils";
 
 interface TravelResultProps {
   rawContent: string;
   onReset: () => void;
+  travelData?: {
+    destination: string;
+    startDate: string;
+    endDate: string;
+    travelers: string;
+    tripType: string;
+  };
 }
 
 interface ParsedResult {
@@ -54,9 +62,78 @@ interface ParsedResult {
   tips?: string[];
 }
 
-export function TravelResult({ rawContent, onReset }: TravelResultProps) {
+export function TravelResult({ rawContent, onReset, travelData }: TravelResultProps) {
   const [parsed, setParsed] = useState<ParsedResult | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+
+  // 导出 PDF
+  const handleExportPDF = async () => {
+    if (!parsed) return;
+    setExporting(true);
+    try {
+      const data: TravelData = {
+        summary: parsed.summary || '',
+        itinerary: parsed.itinerary?.map(item => ({
+          day: item.day,
+          theme: item.title,
+          morning: item.morning,
+          afternoon: item.afternoon,
+          evening: item.evening
+        })) || [],
+        attractions: parsed.attractions?.map(a => ({
+          name: a.name,
+          description: a.description,
+          duration: a.recommendedTime,
+          highlights: a.highlights.join('、'),
+          ticket: a.ticket
+        })) || [],
+        food: parsed.foodRecommendations?.map(f => ({
+          name: f.name,
+          type: f.type,
+          price: f.priceRange,
+          specialty: f.specialties.join('、'),
+          location: f.location
+        })) || [],
+        luggage: parsed.packingList ? [
+          { category: '证件', items: parsed.packingList.documents || [] },
+          { category: '衣物', items: parsed.packingList.clothing || [] },
+          { category: '电子设备', items: parsed.packingList.electronics || [] },
+          { category: '洗漱用品', items: parsed.packingList.toiletries || [] },
+          { category: '药品', items: parsed.packingList.medicine || [] },
+          { category: '其他', items: parsed.packingList.others || [] }
+        ] : [],
+        tips: parsed.tips
+      };
+      await exportToPDF(data, travelData);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // 分享攻略
+  const handleShare = async () => {
+    if (!travelData || !parsed) return;
+    try {
+      const res = await fetch("/api/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          travelData: { ...travelData, ...parsed }
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setShareUrl(data.shareUrl);
+        // 复制到剪贴板
+        await navigator.clipboard.writeText(data.shareUrl);
+        alert("分享链接已复制到剪贴板！");
+      }
+    } catch {
+      alert("分享失败，请重试");
+    }
+  };
 
   const parseContent = useCallback(() => {
     try {
@@ -112,17 +189,27 @@ export function TravelResult({ rawContent, onReset }: TravelResultProps) {
   return (
     <div className="w-full max-w-6xl mx-auto space-y-6">
       {/* 工具栏 */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-wrap justify-between items-center gap-2">
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="text-green-600 border-green-600">
             <Check className="w-3 h-3 mr-1" />
             攻略已生成
           </Badge>
         </div>
-        <Button onClick={onReset} variant="outline" size="sm" className="gap-2">
-          <RefreshCw className="w-4 h-4" />
-          重新规划
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={handleExportPDF} variant="outline" size="sm" className="gap-2" disabled={exporting}>
+            <Download className="w-4 h-4" />
+            {exporting ? "导出中..." : "导出PDF"}
+          </Button>
+          <Button onClick={handleShare} variant="outline" size="sm" className="gap-2">
+            <Share2 className="w-4 h-4" />
+            分享
+          </Button>
+          <Button onClick={onReset} variant="outline" size="sm" className="gap-2">
+            <RefreshCw className="w-4 h-4" />
+            重新规划
+          </Button>
+        </div>
       </div>
 
       {/* 概览 */}

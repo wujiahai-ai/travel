@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Plane, Sparkles, User, LogOut, Crown } from "lucide-react";
+import { Plane, Sparkles, User, LogOut, Crown, History } from "lucide-react";
 import { TravelForm, TravelFormData } from "@/components/travel-form";
 import { TravelResult, LoadingSkeleton } from "@/components/travel-result";
 import { useRouter } from "next/navigation";
@@ -23,6 +23,7 @@ export default function Home() {
   const [hasResult, setHasResult] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [deviceUuid, setDeviceUuid] = useState<string>("");
+  const [currentFormData, setCurrentFormData] = useState<TravelFormData | null>(null);
   const [reportStatus, setReportStatus] = useState<"idle" | "success" | "error">("idle");
   const [user, setUser] = useState<UserInfo | null>(null);
   const [showLimitAlert, setShowLimitAlert] = useState(false);
@@ -70,6 +71,9 @@ export default function Home() {
   };
 
   const handleGenerate = useCallback(async (data: TravelFormData) => {
+    // 保存表单数据用于导出和分享
+    setCurrentFormData(data);
+    
     // 检查生成次数限制
     if (user && !user.can_generate) {
       setShowLimitAlert(true);
@@ -249,6 +253,13 @@ export default function Home() {
                     </p>
                   </div>
                   <div className="flex gap-1">
+                    <button
+                      onClick={() => router.push("/history")}
+                      className="p-2 hover:bg-slate-100 rounded-lg transition"
+                      title="历史记录"
+                    >
+                      <History className="w-5 h-5" />
+                    </button>
                     {user.membership_type === "free" && (
                       <button
                         onClick={() => router.push("/membership")}
@@ -349,7 +360,17 @@ export default function Home() {
           ) : isLoading ? (
             <LoadingSkeleton />
           ) : (
-            <TravelResult rawContent={result} onReset={handleReset} />
+            <TravelResult 
+              rawContent={result} 
+              onReset={handleReset}
+              travelData={currentFormData ? {
+                destination: currentFormData.destination,
+                startDate: currentFormData.startDate,
+                endDate: currentFormData.endDate,
+                travelers: String(currentFormData.travelers),
+                tripType: currentFormData.tripType
+              } : undefined}
+            />
           )}
         </div>
 

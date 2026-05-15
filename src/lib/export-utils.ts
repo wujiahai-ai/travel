@@ -41,7 +41,7 @@ export interface TravelData {
 }
 
 // 导出为 PDF
-export async function exportToPDF(data: TravelData, filename: string = 'travel-plan.pdf'): Promise<void> {
+export async function exportToPDF(data: TravelData, basicInfo?: { destination?: string; startDate?: string; endDate?: string; travelers?: string; tripType?: string }, filename: string = 'travel-plan.pdf'): Promise<void> {
   const pdf = new jsPDF('p', 'mm', 'a4');
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
